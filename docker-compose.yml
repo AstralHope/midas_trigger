@@ -1,6 +1,6 @@
 services:
   api-trigger:
-    image: midas_trigger:latest
+    image: ghcr.io/astralhope/midas_trigger:0.1
     pull_policy: never
     container_name: api_script_trigger
     ports:
