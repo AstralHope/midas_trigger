@@ -1,7 +1,9 @@
 services:
   api-trigger:
     image: midas_trigger:latest
-    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: api_script_trigger
     ports:
       - "9020:9020"

@@ -17,12 +17,10 @@ A small Docker service based on Python 3.14 that exposes configured Python and S
 
 ## Start the service
 
-Requirements: Docker and Docker Compose. Build the image separately from starting the service. The local image is named `midas_trigger:0.1`; Compose uses the local image and does not build or pull it.
-
-Build the image on a machine with access to the required package and base image sources:
+Requirements: Docker and Docker Compose. Compose builds the local `midas_trigger:latest` image from the current Dockerfile so you can validate HTTP and MCP locally.
 
 ```bash
-docker build -t midas_trigger:0.1 .
+docker compose up -d --build
 ```
 
 ### Publish on a Git tag
@@ -38,14 +36,14 @@ After the workflow completes, find the image in the repository's **Packages** pa
 
 ```bash
 docker pull ghcr.io/astralhope/midas_trigger:0.1
-docker tag ghcr.io/astralhope/midas_trigger:0.1 midas_trigger:0.1
+docker tag ghcr.io/astralhope/midas_trigger:0.1 midas_trigger:latest
 ```
 
 Alternatively, download the matching `midas_trigger-<TAG>-linux-<ARCH>.tar.gz` asset from the GitHub Release and load it into Docker:
 
 ```bash
 gunzip -c midas_trigger-0.1-linux-amd64.tar.gz | docker load
-docker tag midas_trigger:0.1-linux-amd64 midas_trigger:0.1
+docker tag midas_trigger:0.1-linux-amd64 midas_trigger:latest
 ```
 
 For an offline/internal deployment, save that local tag, transfer the archive, and load it as described below.
@@ -53,7 +51,7 @@ For an offline/internal deployment, save that local tag, transfer the archive, a
 For an internal or offline environment, export the built image, transfer the archive, and import it there:
 
 ```bash
-docker save -o midas_trigger.tar midas_trigger:0.1
+docker save -o midas_trigger.tar midas_trigger:latest
 # Transfer midas_trigger.tar to the target machine
 docker load -i midas_trigger.tar
 ```
@@ -216,11 +214,16 @@ The container runs as UID 8000. On Linux, make sure the host `logs/` directory i
 
 ## Configuration and deployment
 
-Compose mounts `./scripts`, `./data`, `config.yaml`, and `keys.json` into the container. Route and key file changes take effect without a restart. After changing Python dependencies or server code, rebuild the image manually, then recreate the container:
+Compose builds the image from the current Dockerfile and mounts `./scripts`, `./data`, `./logs`, `config.yaml`, and `keys.json`. Route and key file changes take effect without a restart. After changing Python dependencies or server code, rebuild and recreate the container:
 
 ```bash
-docker build -t midas_trigger:0.1 .
-docker compose up -d --force-recreate
+docker compose up -d --build --force-recreate
+```
+
+The local MCP endpoint is `http://localhost:9020/mcp`. Connect with MCP Inspector or another Streamable HTTP client using the `X-API-Key: <YOUR_API_KEY>` header. Follow startup and MCP request logs with:
+
+```bash
+docker compose logs -f api-trigger
 ```
 
 The pinned FastAPI and Uvicorn versions satisfy the newer Starlette and Uvicorn requirements pulled in by the MCP SDK on Python 3.14.
@@ -239,6 +242,6 @@ manage_keys.py          Host-side key management CLI
 scripts/                Python and Shell scripts
 data/                   Example persistent output directory
 Dockerfile              Python 3.14 image definition
-docker-compose.yml      Starts the prebuilt midas_trigger:0.1 image
+docker-compose.yml      Builds and starts the local midas_trigger image
 .github/workflows/     Publishes version-tagged images to GitHub Packages
 ```

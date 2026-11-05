@@ -17,10 +17,10 @@ English: [README.md](README.md)
 
 ## 启动服务
 
-需要安装 Docker 和 Docker Compose。镜像构建与服务启动分开执行。本地镜像名称为 `midas_trigger:0.1`；Compose 只使用本地镜像，不会构建或拉取镜像。
+需要安装 Docker 和 Docker Compose。Compose 会从当前 Dockerfile 本地构建 `midas_trigger:latest`，方便先在本机验证 HTTP 和 MCP。
 
 ```bash
-docker build -t midas_trigger:0.1 .
+docker compose up -d --build
 ```
 
 ### 推送 Git tag 时自动发布
@@ -36,14 +36,14 @@ git push origin 0.1
 
 ```bash
 docker pull ghcr.io/astralhope/midas_trigger:0.1
-docker tag ghcr.io/astralhope/midas_trigger:0.1 midas_trigger:0.1
+docker tag ghcr.io/astralhope/midas_trigger:0.1 midas_trigger:latest
 ```
 
 也可以从 GitHub Release 下载对应架构的 `midas_trigger-<TAG>-linux-<ARCH>.tar.gz`，导入本地 Docker：
 
 ```bash
 gunzip -c midas_trigger-0.1-linux-amd64.tar.gz | docker load
-docker tag midas_trigger:0.1-linux-amd64 midas_trigger:0.1
+docker tag midas_trigger:0.1-linux-amd64 midas_trigger:latest
 ```
 
 内网或离线部署时，将该本地标签保存为镜像归档并传输，步骤见下方说明。
@@ -51,7 +51,7 @@ docker tag midas_trigger:0.1-linux-amd64 midas_trigger:0.1
 在可以访问所需基础镜像和 Python 包源的机器上手动构建镜像。迁移到内网或离线环境时，先导出镜像并将归档文件传到目标机器，然后导入：
 
 ```bash
-docker save -o midas_trigger.tar midas_trigger:0.1
+docker save -o midas_trigger.tar midas_trigger:latest
 # 将 midas_trigger.tar 传到目标机器
 docker load -i midas_trigger.tar
 ```
@@ -216,11 +216,16 @@ API 会捕获标准输出和标准错误并返回给调用方。不要在输出�
 
 ## 配置与部署
 
-Compose 会挂载 `./scripts`、`./data`、`config.yaml` 和 `keys.json`。路由和密钥文件修改后无需重启即可生效。修改 Python 依赖或服务代码后，手动重建镜像并重新创建容器：
+Compose 会从本地 Dockerfile 构建镜像，并挂载 `./scripts`、`./data`、`./logs`、`config.yaml` 和 `keys.json`。路由和密钥文件修改后无需重启即可生效。修改 Python 依赖或服务代码后，重新构建并创建容器：
 
 ```bash
-docker build -t midas_trigger:0.1 .
-docker compose up -d --force-recreate
+docker compose up -d --build --force-recreate
+```
+
+本地 MCP 端点为 `http://localhost:9020/mcp`。可使用 MCP Inspector 或支持 Streamable HTTP 的客户端验证，认证请求头为 `X-API-Key: <YOUR_API_KEY>`。查看服务启动和 MCP 请求日志：
+
+```bash
+docker compose logs -f api-trigger
 ```
 
 固定的 FastAPI 和 Uvicorn 版本与 Python 3.14 下 MCP SDK 所需的新版 Starlette 和 Uvicorn 依赖兼容。
@@ -240,6 +245,6 @@ scripts/                Python 和 Shell 脚本
 data/                   示例持久化输出目录
 logs/                   HTTP/MCP 与脚本运行日志
 Dockerfile              Python 3.14 容器镜像定义
-docker-compose.yml      启动预构建的 midas_trigger:0.1 镜像
+docker-compose.yml      本地构建并启动 midas_trigger 镜像
 .github/workflows/     将版本 tag 对应的镜像发布到 GitHub Packages
 ```

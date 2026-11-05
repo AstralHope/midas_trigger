@@ -347,6 +347,15 @@ async def log_http_request(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def normalize_mcp_path(request: Request, call_next):
+    # Starlette mounts match `/mcp/` but not the exact `/mcp` path.
+    # Normalize the latter so MCP clients can use the documented endpoint.
+    if request.scope.get("path") == "/mcp":
+        request.scope["path"] = "/mcp/"
+    return await call_next(request)
+
+
 @app.api_route("/{path:path}", methods=["GET", "POST"])
 async def catch_all_trigger(path: str, request: Request, _: str = Security(verify_api_key)):
     request_path = f"/{path}"
