@@ -47,8 +47,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 
 # Create script and data directories with permissions
-RUN mkdir -p /scripts /data && \
-    chown -R chksys:chksys /app /scripts /data
+RUN mkdir -p /scripts /data /logs && \
+    chown -R chksys:chksys /app /scripts /data /logs
 
 # Use user chksys
 USER chksys

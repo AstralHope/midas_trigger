@@ -241,3 +241,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Runtime logs
+logs/*.log
+logs/*.log.*

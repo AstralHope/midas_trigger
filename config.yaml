@@ -9,3 +9,6 @@ routes:
     script: "long_task.py"
     method: "GET"
     timeout: 1.0
+  - path: "/parameter-demo"
+    script: "parameter_demo.py"
+    method: "GET"

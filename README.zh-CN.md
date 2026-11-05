@@ -13,6 +13,7 @@ English: [README.md](README.md)
 - 向调用方返回脚本输出、退出状态、运行时间和超时信息。
 - 容器以非 root 用户 `chksys`（UID/GID 8000）运行。
 - 容器包含 Eclipse Temurin 当前维护的 JDK 8，可供 Java 工具和脚本使用。
+- HTTP/MCP 请求记录、鉴权结果和脚本 stdout/stderr 会写入 `./logs/service.log`，并同时输出到 Docker 容器日志。
 
 ## 启动服务
 
@@ -92,6 +93,9 @@ routes:
     script: "helloworld.py"
     method: "GET"
     timeout: 30.0
+  - path: "/parameter-demo"
+    script: "parameter_demo.py"
+    method: "GET"
   - path: "/build-report"
     script: "build_report.sh"
     method: "POST"
@@ -103,6 +107,17 @@ routes:
 ### 位置参数与具名参数
 
 对于 `GET` 路由，重复使用查询参数 `arg` 传入位置参数；其他查询参数均作为具名参数：
+
+项目自带的 `/parameter-demo` 路由演示必填位置参数 `name` 和必填具名参数 `mood`：
+
+```bash
+curl -G -H "X-API-Key: <YOUR_API_KEY>" \
+  --data-urlencode "arg=Alice" \
+  --data-urlencode "mood=curious" \
+  http://localhost:9020/parameter-demo
+```
+
+输出示例：`Hello, Alice! You seem curious.`
 
 ```bash
 curl -G -H "X-API-Key: <YOUR_API_KEY>" \
@@ -143,6 +158,8 @@ X-API-Key: <YOUR_API_KEY>
 
 - `list_scripts`：返回当前配置的路由路径、脚本名称、HTTP 方法和超时时间。
 - `run_script`：接收 `path`（例如 `/build-report`），以及可选的 `args` 数组和 `kwargs` 对象，然后执行对应脚本。参数格式与 HTTP 接口一致。
+
+必填参数调用示例：`run_script(path="/parameter-demo", args=["Alice"], kwargs={"mood": "curious"})`。
 
 支持远程 Streamable HTTP 服务和自定义请求头的客户端，可参考以下 `mcp.json` 配置：
 
@@ -191,6 +208,12 @@ print("Wrote result.txt")
 
 API 会捕获标准输出和标准错误并返回给调用方。不要在输出中打印密钥等敏感信息。
 
+### 服务日志
+
+服务日志会写入宿主机的 `./logs/service.log`，日志按 10 MB 轮转并保留 5 个旧文件。每条 HTTP/MCP 请求会记录方法、路径、状态码、耗时、Host、Origin 和是否携带 API Key；不会记录 API Key 值。脚本运行日志会记录脚本名、状态、退出码、耗时及完整 stdout/stderr。脚本输出可能包含敏感内容，请限制 `logs/` 目录的访问权限并定期清理。
+
+容器以 UID 8000 运行，Linux 部署时请确保宿主机的 `logs/` 可由该 UID 写入；如出现 `file_logging_unavailable`，可执行 `sudo chown -R 8000:8000 logs` 后重启容器。文件日志无法写入时，服务仍会把日志输出到 `docker compose logs`。
+
 ## 配置与部署
 
 Compose 会挂载 `./scripts`、`./data`、`config.yaml` 和 `keys.json`。路由和密钥文件修改后无需重启即可生效。修改 Python 依赖或服务代码后，手动重建镜像并重新创建容器：
@@ -215,6 +238,7 @@ keys.json               API Key 哈希（由 manage_keys.py 管理）
 manage_keys.py          宿主机密钥管理命令行工具
 scripts/                Python 和 Shell 脚本
 data/                   示例持久化输出目录
+logs/                   HTTP/MCP 与脚本运行日志
 Dockerfile              Python 3.14 容器镜像定义
 docker-compose.yml      启动预构建的 midas_trigger:0.1 镜像
 .github/workflows/     将版本 tag 对应的镜像发布到 GitHub Packages

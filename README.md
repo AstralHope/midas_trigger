@@ -13,6 +13,7 @@ A small Docker service based on Python 3.14 that exposes configured Python and S
 - Script output, exit status, duration, and timeout information are returned to the caller.
 - The container runs as the unprivileged `chksys` user (UID/GID 8000).
 - The container includes the current Eclipse Temurin JDK 8 package for Java tools and scripts.
+- HTTP/MCP request details, authentication outcomes, and script stdout/stderr are written to `./logs/service.log` and also sent to Docker container logs.
 
 ## Start the service
 
@@ -94,6 +95,9 @@ routes:
     script: "helloworld.py"
     method: "GET"
     timeout: 30.0
+  - path: "/parameter-demo"
+    script: "parameter_demo.py"
+    method: "GET"
   - path: "/build-report"
     script: "build_report.sh"
     method: "POST"
@@ -109,6 +113,17 @@ curl -H "X-API-Key: <YOUR_API_KEY>" http://localhost:9020/helloworld
 ```
 
 For a `GET` route, repeat the `arg` query parameter for positional arguments. Every other query parameter is treated as a named argument:
+
+The included `/parameter-demo` route demonstrates a required positional argument, `name`, and a required named argument, `mood`:
+
+```bash
+curl -G -H "X-API-Key: <YOUR_API_KEY>" \
+  --data-urlencode "arg=Alice" \
+  --data-urlencode "mood=curious" \
+  http://localhost:9020/parameter-demo
+```
+
+Example output: `Hello, Alice! You seem curious.`
 
 ```bash
 curl -G -H "X-API-Key: <YOUR_API_KEY>" \
@@ -143,6 +158,8 @@ The server exposes two tools:
 
 - `list_scripts` returns the currently configured route paths, script names, methods, and timeouts.
 - `run_script` takes a `path` (for example, `/build-report`), optional `args` array, and optional `kwargs` object, then executes the mapped script. Argument formatting matches the HTTP interface.
+
+Required argument example: `run_script(path="/parameter-demo", args=["Alice"], kwargs={"mood": "curious"})`.
 
 Example `mcp.json` configuration for clients that support remote Streamable HTTP servers and custom headers:
 
@@ -190,6 +207,12 @@ print("Wrote result.txt")
 ```
 
 The API captures standard output and standard error and returns them to the caller. Do not print secrets into either stream.
+
+### Service logs
+
+Service logs are written to `./logs/service.log`, rotated at 10 MB, with five old files retained. Each HTTP/MCP request records its method, path, status, duration, Host, Origin, and whether an API key header was present; API key values are never logged. Script run logs include the script name, status, exit code, duration, and complete stdout/stderr. Script output may contain sensitive data, so restrict access to `logs/` and clean it up regularly.
+
+The container runs as UID 8000. On Linux, make sure the host `logs/` directory is writable by that UID; if `file_logging_unavailable` appears, run `sudo chown -R 8000:8000 logs` and restart the container. If file logging is unavailable, logs continue to appear in `docker compose logs`.
 
 ## Configuration and deployment
 

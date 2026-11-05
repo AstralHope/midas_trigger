@@ -1,15 +1,19 @@
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
 import subprocess
 import time
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import yaml
 from fastapi import FastAPI, HTTPException, Request, Security
@@ -22,8 +26,31 @@ from mcp.server.transport_security import TransportSecuritySettings
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "config.yaml")
 KEYS_PATH = os.environ.get("KEYS_PATH", "keys.json")
 SCRIPTS_DIR = Path(os.environ.get("SCRIPTS_DIR", "/scripts"))
+LOG_DIR = Path(os.environ.get("LOG_DIR", "logs"))
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
+
+logger = logging.getLogger("midas_trigger")
+request_id_context: ContextVar[str] = ContextVar("request_id", default="-")
+logger.setLevel(logging.INFO)
+logger.propagate = False
+if not logger.handlers:
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            LOG_DIR / "service.log",
+            maxBytes=int(os.environ.get("LOG_MAX_BYTES", 10 * 1024 * 1024)),
+            backupCount=int(os.environ.get("LOG_BACKUP_COUNT", 5)),
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except OSError:
+        logger.exception("file_logging_unavailable log_dir=%s; continuing with container logs", LOG_DIR)
 
 _config_cache: dict[str, Any] = {"routes": [], "mtime": None}
 
@@ -43,8 +70,8 @@ def load_config() -> list[dict[str, Any]]:
             _config_cache["routes"] = routes
             _config_cache["mtime"] = mtime
         return _config_cache["routes"]
-    except Exception as exc:
-        print(f"Error reading config {CONFIG_PATH}: {exc}")
+    except Exception:
+        logger.exception("config_read_failed path=%s", CONFIG_PATH)
         return _config_cache.get("routes", [])
 
 
@@ -62,8 +89,8 @@ def load_api_key_hashes() -> set[str]:
                 key_hash = entry.get("hash")
                 if key_hash:
                     allowed_hashes.add(key_hash.strip().lower())
-        except Exception as exc:
-            print(f"Error reading keys file {KEYS_PATH}: {exc}")
+        except Exception:
+            logger.exception("api_key_file_read_failed path=%s", KEYS_PATH)
     return allowed_hashes
 
 
@@ -76,6 +103,7 @@ def is_valid_api_key(api_key: str | None) -> bool:
 
 async def verify_api_key(api_key: str = Security(api_key_header)) -> str:
     if not is_valid_api_key(api_key):
+        logger.warning("auth_rejected interface=http_api reason=invalid_or_unconfigured_key")
         raise HTTPException(status_code=403, detail="Could not validate credentials (Invalid API Key)")
     return api_key
 
@@ -104,6 +132,34 @@ def command_arguments(args: Any, kwargs: Any) -> list[str]:
             raise HTTPException(status_code=400, detail=f"Invalid named argument '{name}'")
         argv.append(f"--{name}={stringify(value, f'Named argument {name!r}')}")
     return argv
+
+
+def _output_text(value: str | bytes | None) -> str:
+    if isinstance(value, bytes):
+        return value.decode(errors="replace").strip()
+    return (value or "").strip()
+
+
+def _log_script_result(
+    run_id: str,
+    script_name: str,
+    status: str,
+    duration: float,
+    stdout: str,
+    stderr: str,
+    exit_code: int | None = None,
+) -> None:
+    logger.info(
+        "script_finished request_id=%s run_id=%s script=%s status=%s exit_code=%s duration_seconds=%.4f",
+        request_id_context.get(),
+        run_id,
+        script_name,
+        status,
+        exit_code,
+        duration,
+    )
+    logger.info("script_stdout request_id=%s run_id=%s script=%s\n%s", request_id_context.get(), run_id, script_name, stdout or "<empty>")
+    logger.info("script_stderr request_id=%s run_id=%s script=%s\n%s", request_id_context.get(), run_id, script_name, stderr or "<empty>")
 
 
 def execute_script(target_route: dict[str, Any], args: Any = None, kwargs: Any = None) -> dict[str, Any]:
@@ -137,38 +193,51 @@ def execute_script(target_route: dict[str, Any], args: Any = None, kwargs: Any =
     script_args = command_arguments([] if args is None else args, {} if kwargs is None else kwargs)
     received_time = datetime.now().astimezone().isoformat()
     start_time = time.monotonic()
+    run_id = uuid4().hex[:12]
+    logger.info(
+        "script_started request_id=%s run_id=%s script=%s timeout_seconds=%s positional_arg_count=%s named_arg_count=%s",
+        request_id_context.get(),
+        run_id,
+        script_name,
+        timeout,
+        len(args or []),
+        len(kwargs or {}),
+    )
     try:
         result = subprocess.run(
             [interpreter, str(script_path), *script_args], capture_output=True, text=True, check=True, timeout=timeout
         )
-        return {
-            "status": "success",
-            "script": script_name,
-            "request_received_time": received_time,
-            "execution_duration_seconds": round(time.monotonic() - start_time, 4),
-            "stdout": result.stdout.strip(),
-            "stderr": result.stderr.strip(),
-        }
+        status = "success"
+        exit_code = result.returncode
+        stdout = _output_text(result.stdout)
+        stderr = _output_text(result.stderr)
     except subprocess.TimeoutExpired as exc:
-        return {
-            "status": "timeout",
-            "script": script_name,
-            "request_received_time": received_time,
-            "execution_duration_seconds": round(time.monotonic() - start_time, 4),
-            "stdout": exc.stdout.decode(errors="replace").strip() if isinstance(exc.stdout, bytes) else (exc.stdout or "").strip(),
-            "stderr": f"Script execution timed out after {timeout} seconds. "
-            + (exc.stderr.decode(errors="replace").strip() if isinstance(exc.stderr, bytes) else (exc.stderr or "").strip()),
-        }
+        status = "timeout"
+        exit_code = None
+        stdout = _output_text(exc.stdout)
+        stderr = f"Script execution timed out after {timeout} seconds. {_output_text(exc.stderr)}".strip()
     except subprocess.CalledProcessError as exc:
-        return {
-            "status": "failed",
-            "script": script_name,
-            "request_received_time": received_time,
-            "execution_duration_seconds": round(time.monotonic() - start_time, 4),
-            "exit_code": exc.returncode,
-            "stdout": (exc.stdout or "").strip(),
-            "stderr": (exc.stderr or "").strip(),
-        }
+        status = "failed"
+        exit_code = exc.returncode
+        stdout = _output_text(exc.stdout)
+        stderr = _output_text(exc.stderr)
+    except Exception:
+        logger.exception("script_crashed run_id=%s script=%s", run_id, script_name)
+        raise
+
+    duration = round(time.monotonic() - start_time, 4)
+    _log_script_result(run_id, script_name, status, duration, stdout, stderr, exit_code)
+    response = {
+        "status": status,
+        "script": script_name,
+        "request_received_time": received_time,
+        "execution_duration_seconds": duration,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+    if status == "failed":
+        response["exit_code"] = exit_code
+    return response
 
 
 allowed_mcp_hosts = [
@@ -231,9 +300,51 @@ app.mount("/mcp", mcp_asgi_app, name="mcp")
 
 @app.middleware("http")
 async def authenticate_mcp(request: Request, call_next):
-    if request.url.path.startswith("/mcp") and not is_valid_api_key(request.headers.get(API_KEY_NAME)):
-        return JSONResponse(status_code=403, content={"detail": "Could not validate credentials (Invalid API Key)"})
+    if request.url.path.startswith("/mcp"):
+        api_key = request.headers.get(API_KEY_NAME)
+        if not is_valid_api_key(api_key):
+            logger.warning(
+                "auth_rejected interface=mcp reason=invalid_or_unconfigured_key key_header_present=%s",
+                bool(api_key),
+            )
+            return JSONResponse(status_code=403, content={"detail": "Could not validate credentials (Invalid API Key)"})
     return await call_next(request)
+
+
+@app.middleware("http")
+async def log_http_request(request: Request, call_next):
+    request_id = uuid4().hex[:12]
+    start_time = time.monotonic()
+    client_ip = request.client.host if request.client else "unknown"
+    request_id_token = request_id_context.set(request_id)
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(
+            "http_request_failed request_id=%s method=%s path=%s client=%s host=%s origin=%s",
+            request_id,
+            request.method,
+            request.url.path,
+            client_ip,
+            request.headers.get("host", ""),
+            request.headers.get("origin", ""),
+        )
+        raise
+    finally:
+        request_id_context.reset(request_id_token)
+    logger.info(
+        "http_request request_id=%s method=%s path=%s status=%s duration_ms=%.2f client=%s host=%s origin=%s api_key_header_present=%s",
+        request_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        (time.monotonic() - start_time) * 1000,
+        client_ip,
+        request.headers.get("host", ""),
+        request.headers.get("origin", ""),
+        bool(request.headers.get(API_KEY_NAME)),
+    )
+    return response
 
 
 @app.api_route("/{path:path}", methods=["GET", "POST"])

@@ -8,9 +8,11 @@ services:
     environment:
       MCP_ALLOWED_HOSTS: "${MCP_ALLOWED_HOSTS:-localhost:*,127.0.0.1:*,[::1]:*}"
       MCP_ALLOWED_ORIGINS: "${MCP_ALLOWED_ORIGINS:-}"
+      LOG_DIR: /logs
     volumes:
       - ./scripts:/scripts
       - ./data:/data
+      - ./logs:/logs
       - ./config.yaml:/app/config.yaml
       - ./keys.json:/app/keys.json
     restart: unless-stopped
