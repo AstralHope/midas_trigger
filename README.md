@@ -55,9 +55,18 @@ Start the service from the directory containing `docker-compose.yml`:
 docker compose up -d
 ```
 
-The service listens on port `8000`. The HTTP API remains at `http://localhost:8000`; the MCP endpoint is `http://localhost:8000/mcp`.
+The service listens on port `9020`. The HTTP API remains at `http://localhost:9020`; the MCP endpoint is `http://localhost:9020/mcp`.
 
-By default there are no active keys. Create one on the host:
+This repository currently includes an API key for local testing (its hash is also in `keys.json`). Use it to try the example endpoint:
+
+```bash
+curl -H "X-API-Key: 8e6b78e064f0b2242257c3b76d8cf03b47a6bd4ded1f5cb9" \
+  http://localhost:9020/helloworld
+```
+
+**Before production use, remove this test key from the README and revoke `test` from `keys.json` (`python manage_keys.py revoke --client test`), then create and securely store your own key. Never commit real credentials to source control.**
+
+Create a production key on the host:
 
 ```bash
 python manage_keys.py create --client my-app
@@ -88,7 +97,7 @@ Each route maps one URL path to a file under `/scripts`. Supported extensions ar
 Trigger a route with its configured HTTP method:
 
 ```bash
-curl -H "X-API-Key: <YOUR_API_KEY>" http://localhost:8000/helloworld
+curl -H "X-API-Key: <YOUR_API_KEY>" http://localhost:9020/helloworld
 ```
 
 For a `GET` route, repeat the `arg` query parameter for positional arguments. Every other query parameter is treated as a named argument:
@@ -98,7 +107,7 @@ curl -G -H "X-API-Key: <YOUR_API_KEY>" \
   --data-urlencode "arg=monthly report" \
   --data-urlencode "arg=2026" \
   --data-urlencode "format=csv" \
-  http://localhost:8000/build-report
+  http://localhost:9020/build-report
 ```
 
 For a `POST` route, send a JSON object with optional `args` (array) and `kwargs` (object):
@@ -107,7 +116,7 @@ For a `POST` route, send a JSON object with optional `args` (array) and `kwargs`
 curl -X POST -H "X-API-Key: <YOUR_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"args":["monthly report",2026],"kwargs":{"format":"csv"}}' \
-  http://localhost:8000/build-report
+  http://localhost:9020/build-report
 ```
 
 Each positional value becomes one command-line argument in order. Each named value becomes `--name=value`; values may be strings, numbers, or booleans. For Python scripts, read them with `sys.argv` or `argparse`; for Shell scripts, use `$1`, `$2`, and so on, and parse named options as usual. The server passes values as separate process arguments and does not evaluate them as shell code.
@@ -116,7 +125,7 @@ Successful and unsuccessful script runs return JSON containing `status`, `script
 
 ## MCP usage
 
-Configure an MCP client to connect to `http://localhost:8000/mcp` using Streamable HTTP and add this HTTP header:
+Configure an MCP client to connect to `http://localhost:9020/mcp` using Streamable HTTP and add this HTTP header:
 
 ```text
 X-API-Key: <YOUR_API_KEY>
@@ -133,7 +142,7 @@ Example `mcp.json` configuration for clients that support remote Streamable HTTP
 {
   "mcpServers": {
     "script-trigger": {
-      "url": "http://localhost:8000/mcp",
+      "url": "http://localhost:9020/mcp",
       "headers": {
         "X-API-Key": "<YOUR_API_KEY>"
       }
@@ -185,7 +194,7 @@ docker compose up -d --force-recreate
 
 The pinned FastAPI and Uvicorn versions satisfy the newer Starlette and Uvicorn requirements pulled in by the MCP SDK on Python 3.14.
 
-Port `8000` is exposed by default. Put the service behind TLS and restrict network access appropriately before exposing it outside a trusted network. The same API key authorizes every configured script route and both protocols.
+Port `9020` is exposed by default. Put the service behind TLS and restrict network access appropriately before exposing it outside a trusted network. The same API key authorizes every configured script route and both protocols.
 
 The MCP SDK validates the incoming `Host` header to reduce DNS rebinding risk. The Compose defaults allow local connections. When serving the MCP endpoint through a public hostname or reverse proxy, set `MCP_ALLOWED_HOSTS` in the shell or a Compose `.env` file to the host patterns clients use, for example `mcp.example.com:*,localhost:*`. Browser based MCP clients also send an `Origin` header; list permitted origins in `MCP_ALLOWED_ORIGINS`, such as `https://inspector.example.com`. Keep these lists as narrow as the deployment allows.
 

@@ -161,7 +161,25 @@ def execute_script(target_route: dict[str, Any], args: Any = None, kwargs: Any =
         }
 
 
-mcp = FastMCP("Remote Script Trigger", streamable_http_path="/")
+allowed_mcp_hosts = [
+    host.strip()
+    for host in os.environ.get("MCP_ALLOWED_HOSTS", "localhost:*,127.0.0.1:*,[::1]:*").split(",")
+    if host.strip()
+]
+allowed_mcp_origins = [
+    origin.strip()
+    for origin in os.environ.get("MCP_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+mcp = FastMCP(
+    "Remote Script Trigger",
+    streamable_http_path="/",
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_mcp_hosts,
+        allowed_origins=allowed_mcp_origins,
+    ),
+)
 
 
 @mcp.tool()
@@ -197,23 +215,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Remote Script Trigger API and MCP Server", lifespan=lifespan)
-allowed_mcp_hosts = [
-    host.strip()
-    for host in os.environ.get("MCP_ALLOWED_HOSTS", "localhost:*,127.0.0.1:*,[::1]:*").split(",")
-    if host.strip()
-]
-allowed_mcp_origins = [
-    origin.strip()
-    for origin in os.environ.get("MCP_ALLOWED_ORIGINS", "").split(",")
-    if origin.strip()
-]
-mcp_asgi_app = mcp.streamable_http_app(
-    transport_security=TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=allowed_mcp_hosts,
-        allowed_origins=allowed_mcp_origins,
-    )
-)
+mcp_asgi_app = mcp.streamable_http_app()
 app.mount("/mcp", mcp_asgi_app, name="mcp")
 
 

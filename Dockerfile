@@ -43,8 +43,8 @@ RUN mkdir -p /scripts /data && \
 # Use user chksys
 USER chksys
 
-# Expose port 8000
-EXPOSE 8000
+# Expose port 9020
+EXPOSE 9020
 
 # Start FastAPI server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9020"]

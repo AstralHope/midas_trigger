@@ -53,9 +53,18 @@ docker load -i midas_trigger.tar
 docker compose up -d
 ```
 
-服务监听端口 `8000`。HTTP API 地址为 `http://localhost:8000`，MCP 地址为 `http://localhost:8000/mcp`。
+服务监听端口 `9020`。HTTP API 地址为 `http://localhost:9020`，MCP 地址为 `http://localhost:9020/mcp`。
 
-默认没有启用的密钥。在宿主机上创建一个：
+仓库当前包含一个仅供本地测试的 API Key（也已将其哈希写入 `keys.json`），可直接验证示例接口：
+
+```bash
+curl -H "X-API-Key: 8e6b78e064f0b2242257c3b76d8cf03b47a6bd4ded1f5cb9" \
+  http://localhost:9020/helloworld
+```
+
+**正式使用前请删除 README 中的这个测试 Key，并从 `keys.json` 撤销 `test`（`python manage_keys.py revoke --client test`），然后创建并安全保存自己的 Key。不要将真实密钥提交到代码仓库。**
+
+创建正式使用的密钥：
 
 ```bash
 python manage_keys.py create --client my-app
@@ -92,7 +101,7 @@ curl -G -H "X-API-Key: <YOUR_API_KEY>" \
   --data-urlencode "arg=monthly report" \
   --data-urlencode "arg=2026" \
   --data-urlencode "format=csv" \
-  http://localhost:8000/build-report
+  http://localhost:9020/build-report
 ```
 
 对于 `POST` 路由，请发送包含可选 `args` 数组和 `kwargs` 对象的 JSON：
@@ -101,7 +110,7 @@ curl -G -H "X-API-Key: <YOUR_API_KEY>" \
 curl -X POST -H "X-API-Key: <YOUR_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"args":["monthly report",2026],"kwargs":{"format":"csv"}}' \
-  http://localhost:8000/build-report
+  http://localhost:9020/build-report
 ```
 
 每个位置参数按原顺序成为一个命令行参数；每个具名参数会转换成 `--name=value`。参数值可以是字符串、数字或布尔值。Python 脚本可通过 `sys.argv` 或 `argparse` 读取；Shell 脚本可通过 `$1`、`$2` 等读取位置参数，并按常规方式解析具名选项。服务会将参数作为独立进程参数传递，不会将参数内容当作 Shell 命令执行。
@@ -109,14 +118,14 @@ curl -X POST -H "X-API-Key: <YOUR_API_KEY>" \
 调用示例：
 
 ```bash
-curl -H "X-API-Key: <YOUR_API_KEY>" http://localhost:8000/helloworld
+curl -H "X-API-Key: <YOUR_API_KEY>" http://localhost:9020/helloworld
 ```
 
 成功或失败的脚本执行都会返回 JSON，包含 `status`、`script`、请求时间、耗时、`stdout` 和 `stderr`。脚本以非零状态退出时，`status` 为 `failed`，并返回 `exit_code`；超时时 `status` 为 `timeout`。配置和路由错误使用标准 HTTP 错误状态码。
 
 ## MCP 接口
 
-将 MCP 客户端配置为通过 Streamable HTTP 连接 `http://localhost:8000/mcp`，并添加以下 HTTP 请求头：
+将 MCP 客户端配置为通过 Streamable HTTP 连接 `http://localhost:9020/mcp`，并添加以下 HTTP 请求头：
 
 ```text
 X-API-Key: <YOUR_API_KEY>
@@ -133,7 +142,7 @@ X-API-Key: <YOUR_API_KEY>
 {
   "mcpServers": {
     "script-trigger": {
-      "url": "http://localhost:8000/mcp",
+      "url": "http://localhost:9020/mcp",
       "headers": {
         "X-API-Key": "<YOUR_API_KEY>"
       }
@@ -185,7 +194,7 @@ docker compose up -d --force-recreate
 
 固定的 FastAPI 和 Uvicorn 版本与 Python 3.14 下 MCP SDK 所需的新版 Starlette 和 Uvicorn 依赖兼容。
 
-默认开放端口 `8000`。将服务暴露到可信网络之外前，请配置 TLS 并限制网络访问。同一个 API Key 可以调用所有已配置脚本路由以及两种协议。
+默认开放端口 `9020`。将服务暴露到可信网络之外前，请配置 TLS 并限制网络访问。同一个 API Key 可以调用所有已配置脚本路由以及两种协议。
 
 MCP SDK 会检查请求的 `Host` 头，以降低 DNS 重绑定风险。Compose 默认只允许本机连接。若通过公网域名或反向代理提供 MCP 服务，请在 shell 或 Compose `.env` 文件中设置 `MCP_ALLOWED_HOSTS`，填写客户端使用的 Host 模式，例如 `mcp.example.com:*,localhost:*`。基于浏览器的 MCP 客户端也会发送 `Origin` 请求头；请通过 `MCP_ALLOWED_ORIGINS` 列出允许的来源，例如 `https://inspector.example.com`。允许列表应尽量精确。
 
