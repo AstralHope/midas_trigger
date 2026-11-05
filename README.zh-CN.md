@@ -12,6 +12,7 @@ English: [README.md](README.md)
 - `config.yaml` 和 `keys.json` 会在请求时读取，文件修改后无需重启容器即可生效。
 - 向调用方返回脚本输出、退出状态、运行时间和超时信息。
 - 容器以非 root 用户 `chksys`（UID/GID 8000）运行。
+- 容器包含 Eclipse Temurin 当前维护的 JDK 8，可供 Java 工具和脚本使用。
 
 ## 启动服务
 

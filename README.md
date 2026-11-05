@@ -12,6 +12,7 @@ A small Docker service based on Python 3.14 that exposes configured Python and S
 - `config.yaml` and `keys.json` are read at request time and changes take effect without restarting the container.
 - Script output, exit status, duration, and timeout information are returned to the caller.
 - The container runs as the unprivileged `chksys` user (UID/GID 8000).
+- The container includes the current Eclipse Temurin JDK 8 package for Java tools and scripts.
 
 ## Start the service
 

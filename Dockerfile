@@ -1,4 +1,9 @@
+FROM eclipse-temurin:8-jdk AS temurin8
+
 FROM python:3.14-slim
+
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Install essential system tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -20,7 +25,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     # Data processing tools
     jq \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Use the current official Eclipse Temurin JDK 8 build in this Python-based image.
+COPY --from=temurin8 /opt/java/openjdk /opt/java/openjdk
+RUN java -version && javac -version
 
 # Create user chksys with UID 8000
 RUN groupadd -g 8000 chksys && \
