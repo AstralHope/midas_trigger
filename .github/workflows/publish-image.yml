@@ -13,7 +13,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -47,3 +47,42 @@ jobs:
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
+
+      - name: Export amd64 image archive
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ARCHIVE_TAG="${TAG//\//-}"
+          docker pull --platform linux/amd64 "$IMAGE"
+          docker tag "$IMAGE" "midas_trigger:${ARCHIVE_TAG}-linux-amd64"
+          docker save "midas_trigger:${ARCHIVE_TAG}-linux-amd64" | gzip > "midas_trigger-${ARCHIVE_TAG}-linux-amd64.tar.gz"
+
+      - name: Export arm64 image archive
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ARCHIVE_TAG="${TAG//\//-}"
+          docker pull --platform linux/arm64 "$IMAGE"
+          docker tag "$IMAGE" "midas_trigger:${ARCHIVE_TAG}-linux-arm64"
+          docker save "midas_trigger:${ARCHIVE_TAG}-linux-arm64" | gzip > "midas_trigger-${ARCHIVE_TAG}-linux-arm64.tar.gz"
+
+      - name: Create GitHub Release and upload image archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ARCHIVE_TAG="${TAG//\//-}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "midas_trigger-${ARCHIVE_TAG}-linux-amd64.tar.gz" \
+              "midas_trigger-${ARCHIVE_TAG}-linux-arm64.tar.gz" \
+              --clobber
+          else
+            gh release create "$TAG" \
+              "midas_trigger-${ARCHIVE_TAG}-linux-amd64.tar.gz" \
+              "midas_trigger-${ARCHIVE_TAG}-linux-arm64.tar.gz" \
+              --title "$TAG" \
+              --generate-notes
+          fi

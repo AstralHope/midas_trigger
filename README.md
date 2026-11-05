@@ -25,7 +25,7 @@ docker build -t midas_trigger:0.1 .
 
 ### Publish on a Git tag
 
-The workflow in `.github/workflows/publish-image.yml` publishes an image whenever a version tag such as `0.1` or `v0.1` is pushed. It publishes the matching tag and `latest` to GitHub Container Registry at `ghcr.io/<OWNER>/<REPO>`. GitHub Actions uses the repository's built-in `GITHUB_TOKEN`; no personal access token is needed. The workflow builds both `linux/amd64` and `linux/arm64` images.
+The workflow in `.github/workflows/publish-image.yml` publishes an image whenever a version tag such as `0.1` or `v0.1` is pushed. It publishes the matching tag and `latest` to GitHub Container Registry at `ghcr.io/<OWNER>/<REPO>`, then creates a GitHub Release with the same tag and attaches compressed Docker image archives for `linux/amd64` and `linux/arm64`. GitHub Actions uses the repository's built-in `GITHUB_TOKEN`; no personal access token is needed.
 
 ```bash
 git tag 0.1
@@ -37,6 +37,13 @@ After the workflow completes, find the image in the repository's **Packages** pa
 ```bash
 docker pull ghcr.io/<OWNER>/<REPO>:0.1
 docker tag ghcr.io/<OWNER>/<REPO>:0.1 midas_trigger:0.1
+```
+
+Alternatively, download the matching `midas_trigger-<TAG>-linux-<ARCH>.tar.gz` asset from the GitHub Release and load it into Docker:
+
+```bash
+gunzip -c midas_trigger-0.1-linux-amd64.tar.gz | docker load
+docker tag midas_trigger:0.1-linux-amd64 midas_trigger:0.1
 ```
 
 For an offline/internal deployment, save that local tag, transfer the archive, and load it as described below.
