@@ -23,7 +23,7 @@ docker build -t midas_trigger:0.1 .
 
 ### 推送 Git tag 时自动发布
 
-`.github/workflows/publish-image.yml` 会在推送版本 tag（例如 `0.1` 或 `v0.1`）时自动发布镜像。它会将对应版本标签和 `latest` 推送至 GitHub Container Registry，镜像地址为 `ghcr.io/<OWNER>/<REPO>`，并创建同名 GitHub Release，附带 `linux/amd64` 和 `linux/arm64` 两种架构的压缩 Docker 镜像归档。GitHub Actions 使用仓库内置的 `GITHUB_TOKEN`，无需个人访问令牌。
+`.github/workflows/publish-image.yml` 会在推送版本 tag（例如 `0.1` 或 `v0.1`）时自动发布镜像。它会将对应版本标签和 `latest` 推送至 GitHub Container Registry，镜像地址为 `ghcr.io/astralhope/midas_trigger`，并创建同名 GitHub Release，附带 `linux/amd64` 和 `linux/arm64` 两种架构的压缩 Docker 镜像归档。工作流会将仓库名转成小写以符合 Docker 镜像命名规则。GitHub Actions 使用仓库内置的 `GITHUB_TOKEN`，无需个人访问令牌。
 
 ```bash
 git tag 0.1
@@ -33,8 +33,8 @@ git push origin 0.1
 工作流完成后，可在仓库的 **Packages** 页面查看镜像。若部署机器可以访问 GHCR，可拉取版本并改成本地 Compose 使用的镜像名：
 
 ```bash
-docker pull ghcr.io/<OWNER>/<REPO>:0.1
-docker tag ghcr.io/<OWNER>/<REPO>:0.1 midas_trigger:0.1
+docker pull ghcr.io/astralhope/midas_trigger:0.1
+docker tag ghcr.io/astralhope/midas_trigger:0.1 midas_trigger:0.1
 ```
 
 也可以从 GitHub Release 下载对应架构的 `midas_trigger-<TAG>-linux-<ARCH>.tar.gz`，导入本地 Docker：

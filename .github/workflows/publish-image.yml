@@ -30,11 +30,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Normalize image name
+        id: image-name
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Generate image tags and labels
         id: metadata
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ steps.image-name.outputs.name }}
           tags: |
             type=ref,event=tag
             type=raw,value=latest
@@ -50,20 +54,22 @@ jobs:
 
       - name: Export amd64 image archive
         env:
-          IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          IMAGE_NAME: ${{ steps.image-name.outputs.name }}
           TAG: ${{ github.ref_name }}
         run: |
           ARCHIVE_TAG="${TAG//\//-}"
+          IMAGE="${IMAGE_NAME}:${TAG}"
           docker pull --platform linux/amd64 "$IMAGE"
           docker tag "$IMAGE" "midas_trigger:${ARCHIVE_TAG}-linux-amd64"
           docker save "midas_trigger:${ARCHIVE_TAG}-linux-amd64" | gzip > "midas_trigger-${ARCHIVE_TAG}-linux-amd64.tar.gz"
 
       - name: Export arm64 image archive
         env:
-          IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          IMAGE_NAME: ${{ steps.image-name.outputs.name }}
           TAG: ${{ github.ref_name }}
         run: |
           ARCHIVE_TAG="${TAG//\//-}"
+          IMAGE="${IMAGE_NAME}:${TAG}"
           docker pull --platform linux/arm64 "$IMAGE"
           docker tag "$IMAGE" "midas_trigger:${ARCHIVE_TAG}-linux-arm64"
           docker save "midas_trigger:${ARCHIVE_TAG}-linux-arm64" | gzip > "midas_trigger-${ARCHIVE_TAG}-linux-arm64.tar.gz"
