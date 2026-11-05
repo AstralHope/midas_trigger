@@ -15,16 +15,34 @@ English: [README.md](README.md)
 
 ## 启动服务
 
-需要安装 Docker 和 Docker Compose。镜像构建与服务启动分开执行。镜像名称为 `midas_trigger:latest`；Compose 只使用本地镜像，不会构建或拉取镜像。
+需要安装 Docker 和 Docker Compose。镜像构建与服务启动分开执行。本地镜像名称为 `midas_trigger:0.1`；Compose 只使用本地镜像，不会构建或拉取镜像。
 
 ```bash
-docker build -t midas_trigger:latest .
+docker build -t midas_trigger:0.1 .
 ```
+
+### 推送 Git tag 时自动发布
+
+`.github/workflows/publish-image.yml` 会在推送版本 tag（例如 `0.1` 或 `v0.1`）时自动发布镜像。它会将对应版本标签和 `latest` 推送至 GitHub Container Registry，镜像地址为 `ghcr.io/<OWNER>/<REPO>`。GitHub Actions 使用仓库内置的 `GITHUB_TOKEN`，无需个人访问令牌。工作流会构建 `linux/amd64` 和 `linux/arm64` 两种架构。
+
+```bash
+git tag 0.1
+git push origin 0.1
+```
+
+工作流完成后，可在仓库的 **Packages** 页面查看镜像。若部署机器可以访问 GHCR，可拉取版本并改成本地 Compose 使用的镜像名：
+
+```bash
+docker pull ghcr.io/<OWNER>/<REPO>:0.1
+docker tag ghcr.io/<OWNER>/<REPO>:0.1 midas_trigger:0.1
+```
+
+内网或离线部署时，将该本地标签保存为镜像归档并传输，步骤见下方说明。
 
 在可以访问所需基础镜像和 Python 包源的机器上手动构建镜像。迁移到内网或离线环境时，先导出镜像并将归档文件传到目标机器，然后导入：
 
 ```bash
-docker save -o midas_trigger.tar midas_trigger:latest
+docker save -o midas_trigger.tar midas_trigger:0.1
 # 将 midas_trigger.tar 传到目标机器
 docker load -i midas_trigger.tar
 ```
@@ -161,7 +179,7 @@ API 会捕获标准输出和标准错误并返回给调用方。不要在输出�
 Compose 会挂载 `./scripts`、`./data`、`config.yaml` 和 `keys.json`。路由和密钥文件修改后无需重启即可生效。修改 Python 依赖或服务代码后，手动重建镜像并重新创建容器：
 
 ```bash
-docker build -t midas_trigger:latest .
+docker build -t midas_trigger:0.1 .
 docker compose up -d --force-recreate
 ```
 
@@ -181,5 +199,6 @@ manage_keys.py          宿主机密钥管理命令行工具
 scripts/                Python 和 Shell 脚本
 data/                   示例持久化输出目录
 Dockerfile              Python 3.14 容器镜像定义
-docker-compose.yml      启动预构建的 midas_trigger:latest 镜像
+docker-compose.yml      启动预构建的 midas_trigger:0.1 镜像
+.github/workflows/     将版本 tag 对应的镜像发布到 GitHub Packages
 ```

@@ -15,18 +15,36 @@ A small Docker service based on Python 3.14 that exposes configured Python and S
 
 ## Start the service
 
-Requirements: Docker and Docker Compose. Build the image separately from starting the service. The image is named `midas_trigger:latest`; Compose uses the local image and does not build or pull it.
+Requirements: Docker and Docker Compose. Build the image separately from starting the service. The local image is named `midas_trigger:0.1`; Compose uses the local image and does not build or pull it.
 
 Build the image on a machine with access to the required package and base image sources:
 
 ```bash
-docker build -t midas_trigger:latest .
+docker build -t midas_trigger:0.1 .
 ```
+
+### Publish on a Git tag
+
+The workflow in `.github/workflows/publish-image.yml` publishes an image whenever a version tag such as `0.1` or `v0.1` is pushed. It publishes the matching tag and `latest` to GitHub Container Registry at `ghcr.io/<OWNER>/<REPO>`. GitHub Actions uses the repository's built-in `GITHUB_TOKEN`; no personal access token is needed. The workflow builds both `linux/amd64` and `linux/arm64` images.
+
+```bash
+git tag 0.1
+git push origin 0.1
+```
+
+After the workflow completes, find the image in the repository's **Packages** page. To use a published version on a deployment machine that can access GHCR, pull it and assign the local name expected by Compose:
+
+```bash
+docker pull ghcr.io/<OWNER>/<REPO>:0.1
+docker tag ghcr.io/<OWNER>/<REPO>:0.1 midas_trigger:0.1
+```
+
+For an offline/internal deployment, save that local tag, transfer the archive, and load it as described below.
 
 For an internal or offline environment, export the built image, transfer the archive, and import it there:
 
 ```bash
-docker save -o midas_trigger.tar midas_trigger:latest
+docker save -o midas_trigger.tar midas_trigger:0.1
 # Transfer midas_trigger.tar to the target machine
 docker load -i midas_trigger.tar
 ```
@@ -161,7 +179,7 @@ The API captures standard output and standard error and returns them to the call
 Compose mounts `./scripts`, `./data`, `config.yaml`, and `keys.json` into the container. Route and key file changes take effect without a restart. After changing Python dependencies or server code, rebuild the image manually, then recreate the container:
 
 ```bash
-docker build -t midas_trigger:latest .
+docker build -t midas_trigger:0.1 .
 docker compose up -d --force-recreate
 ```
 
@@ -181,5 +199,6 @@ manage_keys.py          Host-side key management CLI
 scripts/                Python and Shell scripts
 data/                   Example persistent output directory
 Dockerfile              Python 3.14 image definition
-docker-compose.yml      Starts the prebuilt midas_trigger:latest image
+docker-compose.yml      Starts the prebuilt midas_trigger:0.1 image
+.github/workflows/     Publishes version-tagged images to GitHub Packages
 ```
