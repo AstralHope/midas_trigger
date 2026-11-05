@@ -97,7 +97,7 @@ routes:
     timeout: 120.0
 ```
 
-每条路由将一个 URL 路径映射到 `/scripts` 下的脚本。支持 `.py` 和 `.sh` 扩展名，分别使用 `python` 和 `bash` 执行。`method` 默认为 `GET`，`timeout` 默认为 60 秒。位置参数和具名参数都会作为命令行参数传给脚本。
+每条路由将一个 URL 路径映射到 `/scripts` 下的脚本。`script` 支持相对路径和子目录，例如 `sofamq-check/test2.py`；绝对路径及越出 `/scripts` 的 `..` 路径会被拒绝。支持 `.py` 和 `.sh` 扩展名，分别使用 `python` 和 `bash` 执行。`method` 默认为 `GET`，`timeout` 默认为 60 秒。位置参数和具名参数都会作为命令行参数传给脚本。
 
 ### 位置参数与具名参数
 

@@ -109,10 +109,20 @@ def command_arguments(args: Any, kwargs: Any) -> list[str]:
 def execute_script(target_route: dict[str, Any], args: Any = None, kwargs: Any = None) -> dict[str, Any]:
     script_name = target_route.get("script")
     timeout = float(target_route.get("timeout", 60.0))
-    if not script_name or Path(script_name).name != script_name:
+    if not isinstance(script_name, str) or not script_name.strip():
         raise HTTPException(status_code=400, detail="Invalid script name in route configuration")
 
-    script_path = SCRIPTS_DIR / script_name
+    relative_script_path = Path(script_name)
+    if relative_script_path.is_absolute() or ".." in relative_script_path.parts:
+        raise HTTPException(status_code=400, detail="Invalid script path in route configuration")
+
+    scripts_root = SCRIPTS_DIR.resolve()
+    try:
+        script_path = (scripts_root / relative_script_path).resolve()
+        script_path.relative_to(scripts_root)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Script path must stay inside the scripts directory") from exc
+
     if not script_path.is_file():
         raise HTTPException(status_code=404, detail=f"Script '{script_name}' not found in {SCRIPTS_DIR}")
 

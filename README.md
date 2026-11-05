@@ -99,7 +99,7 @@ routes:
     timeout: 120.0
 ```
 
-Each route maps one URL path to a file under `/scripts`. Supported extensions are `.py` and `.sh`; Python scripts run with `python`, and Shell scripts with `bash`. `method` defaults to `GET`, and `timeout` defaults to 60 seconds. Both positional and named arguments are passed to the script as command-line arguments.
+Each route maps one URL path to a script under `/scripts`. The `script` value can include a relative subdirectory, such as `sofamq-check/test2.py`; absolute paths and `..` paths that escape `/scripts` are rejected. Supported extensions are `.py` and `.sh`; Python scripts run with `python`, and Shell scripts with `bash`. `method` defaults to `GET`, and `timeout` defaults to 60 seconds. Both positional and named arguments are passed to the script as command-line arguments.
 
 Trigger a route with its configured HTTP method:
 
