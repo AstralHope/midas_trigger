@@ -1,0 +1,16 @@
+services:
+  api-trigger:
+    image: midas_trigger:latest
+    pull_policy: never
+    container_name: api_script_trigger
+    ports:
+      - "8000:8000"
+    environment:
+      MCP_ALLOWED_HOSTS: "${MCP_ALLOWED_HOSTS:-localhost:*,127.0.0.1:*,[::1]:*}"
+      MCP_ALLOWED_ORIGINS: "${MCP_ALLOWED_ORIGINS:-}"
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+      - ./config.yaml:/app/config.yaml
+      - ./keys.json:/app/keys.json
+    restart: unless-stopped

@@ -1,0 +1,11 @@
+routes:
+  - path: "/helloworld"
+    script: "helloworld.py"
+    method: "GET"
+  - path: "/helloworld-sh"
+    script: "helloworld.sh"
+    method: "GET"
+  - path: "/timeout-test"
+    script: "long_task.py"
+    method: "GET"
+    timeout: 1.0
